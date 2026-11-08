@@ -38,6 +38,14 @@ main{width:min(100%,520px);margin:0 auto;padding:18px 0 28px}.topline{display:fl
 <div id="importSummary" class="hint"></div>
 <div class="section" style="margin-top:12px">IMPORTED ACTIVE TIMERS</div><div id="importedTimers" class="builders"><div class="empty">No village JSON imported yet.</div></div>
 </details>
+<details class="panel" open><summary>Live account sync</summary>
+<p class="hint">Connect this app to your own secure backend. The backend keeps your Supercell API token private and polls the official player profile endpoint. Builder countdowns still come from your village JSON export.</p>
+<div class="field"><label for="apiBase">BACKEND URL</label><input id="apiBase" placeholder="https://your-server.example.com"></div>
+<div class="btnrow"><button class="btn primary" id="connectApi">Connect / sync now</button><button class="btn" id="syncToggle">Auto-sync: ON</button></div>
+<div class="msg" id="syncMsg">Not connected yet.</div>
+<div id="liveProfile" class="hint">Live player profile will appear here after connecting.</div>
+<div class="hint">Automatic profile refresh: every 10 minutes while the app is open. The official API does not expose live builder timers or building levels.</div>
+</details>
 <details class="panel"><summary>Village profile & API settings</summary>
 <div class="formgrid">
 <div class="field"><label for="tagInput">PLAYER TAG</label><input id="tagInput" placeholder="#ABC123"></div>
@@ -45,7 +53,7 @@ main{width:min(100%,520px);margin:0 auto;padding:18px 0 28px}.topline{display:fl
 <div class="field full"><label for="apiToken">SUPERCELL API TOKEN (OPTIONAL)</label><input id="apiToken" type="password" autocomplete="off" placeholder="Paste API token"></div>
 </div>
 <div class="btnrow"><button class="btn primary" id="saveProfile">Save profile</button><button class="btn" id="clearToken">Clear token</button></div>
-<p class="hint">API note: Supercell's public API does not expose live builder countdowns or upgrade finish times. API keys are IP-restricted, so a secure backend with a stable IP is needed for real API requests. This PWA does not send your token anywhere. For safety, the token is kept in memory only and is not persisted when you close or reload the app.</p><div class="msg" id="profileMsg"></div>
+<p class="hint">API note: Supercell's public API does not expose live builder countdowns or upgrade finish times. API keys are IP-restricted, so a secure backend with a stable IP is needed for real API requests. Do not enter your API token in this page. Store it as COC_API_TOKEN on your private backend server. The browser must never receive the token.</p><div class="msg" id="profileMsg"></div>
 </details>
 <p class="hint" style="text-align:center">Unofficial fan-made tracker · Timers are stored locally on this device · Not affiliated with Supercell.</p>
 </main>
@@ -101,12 +109,40 @@ $('save').onclick=()=>{let i=+$('slot').value,end=$('end').value?new Date($('end
 $('clear').onclick=()=>{let i=+$('slot').value;slots[i]={...blank(defaults[i])};save();fillForm(i);render();$('message').textContent='Builder slot cleared.'};
 $('refresh').onclick=()=>{render();$('updated').textContent='UPDATED JUST NOW'};
 $('potionStart').onclick=()=>{potionEnd=Date.now()+3600000;render();$('potionLeft').textContent='01:00:00 left'};
-$('saveProfile').onclick=()=>{let p={tag:$('tagInput').value.trim()||'#YOURPLAYER',th:$('townHall').value.trim()||'16'};localStorage.setItem(PROFILE,JSON.stringify(p));$('playerLabel').textContent=p.tag;$('townLabel').textContent=`TOWN HALL ${p.th} · 6/6 BUILDERS + GOBLIN`;$('profileMsg').textContent='Village profile saved.';tokenInMemory=$('apiToken').value};
+$('saveProfile').onclick=()=>{let p={tag:$('tagInput').value.trim()||'#YOURPLAYER',th:$('townHall').value.trim()||'16'};localStorage.setItem(PROFILE,JSON.stringify(p));$('playerLabel').textContent=p.tag;$('townLabel').textContent=`TOWN HALL ${p.th} · 6/6 BUILDERS + GOBLIN`;$('profileMsg').textContent='Village profile saved.';tokenInMemory=''};
 $('clearToken').onclick=()=>{$('apiToken').value='';tokenInMemory='';$('profileMsg').textContent='Token cleared from this session.'};
 $('importJson').onclick=()=>{try{let raw=$('jsonPaste').value.trim();if(!raw&&$('jsonFile').files[0]){let reader=new FileReader();reader.onload=()=>{try{importVillage(reader.result);$('importMsg').textContent='Village data imported successfully.'}catch(e){$('importMsg').textContent=e.message}};reader.readAsText($('jsonFile').files[0]);return}if(!raw)throw new Error('Choose a JSON file or paste the export first.');importVillage(raw);$('importMsg').textContent='Village data imported successfully.'}catch(e){$('importMsg').textContent=e.message}};
 $('jsonFile').onchange=()=>{let f=$('jsonFile').files[0];if(!f)return;let reader=new FileReader();reader.onload=()=>{$('jsonPaste').value=reader.result};reader.readAsText(f)};
 $('clearImport').onclick=()=>{localStorage.removeItem('coc-imported-village-v1');villageData=null;importedTimers=[];$('importSummary').textContent='Imported village data removed.';renderImported()};
 if(villageData){$('jsonPaste').value='';try{importVillage(villageData)}catch(e){}}
+
+let syncEnabled=true,syncHandle=null,lastLive=null;
+const SYNC_URL_KEY='coc-live-backend-url-v1';
+try{$('apiBase').value=localStorage.getItem(SYNC_URL_KEY)||''}catch{}
+function renderLive(p){
+ lastLive=p;
+ $('liveProfile').innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px"><div><b>${esc(p.name||'Unknown')}</b><div class="tiny">${esc(p.tag||'')}</div></div><div><b>Town Hall ${p.townHallLevel??'—'}</b><div class="tiny">Builder Hall ${p.builderHallLevel??'—'}</div></div><div><b>${Number(p.trophies||0).toLocaleString()}</b><div class="tiny">Trophies</div></div><div><b>${Number(p.expLevel||0)}</b><div class="tiny">XP level</div></div></div><div class="tiny" style="margin-top:8px">Heroes: ${(p.heroes||[]).length} · Troops: ${(p.troops||[]).length} · Spells: ${(p.spells||[]).length} · Equipment: ${(p.heroEquipment||[]).length}</div><div class="tiny">Last successful sync: ${new Date().toLocaleString()}</div>`;
+ $('playerLabel').textContent=p.tag||$('playerLabel').textContent;
+ $('townLabel').textContent=`TOWN HALL ${p.townHallLevel||'—'} · LIVE PROFILE`;
+}
+async function syncNow(){
+ let base=$('apiBase').value.trim().replace(/\/+$/,'');
+ if(!base){$('syncMsg').textContent='Enter your backend URL first.';return}
+ try{localStorage.setItem(SYNC_URL_KEY,base)}catch{}
+ $('syncMsg').textContent='Syncing official player profile…';
+ try{
+  let tag=($('tagInput').value||$('playerLabel').textContent).trim();
+  if(!tag||tag==='#YOURPLAYER')throw new Error('Import your village JSON or enter your player tag first.');
+  let res=await fetch(`${base}/api/player?tag=${encodeURIComponent(tag)}`,{headers:{'Accept':'application/json'}});
+  let data=await res.json().catch(()=>({}));
+  if(!res.ok)throw new Error(data.error||`Backend returned HTTP ${res.status}`);
+  renderLive(data);$('syncMsg').textContent='Connected · profile synced successfully.';
+ }catch(e){$('syncMsg').textContent='Sync failed: '+e.message}
+}
+function startSync(){if(syncHandle)clearInterval(syncHandle);syncHandle=null;if(syncEnabled){syncHandle=setInterval(syncNow,10*60*1000)}}
+$('connectApi').onclick=syncNow;
+$('syncToggle').onclick=()=>{syncEnabled=!syncEnabled;$('syncToggle').textContent='Auto-sync: '+(syncEnabled?'ON':'OFF');startSync();if(syncEnabled)syncNow()};
+startSync();
 render();fillForm(0);setInterval(render,1000);
 if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
 </script></body></html>

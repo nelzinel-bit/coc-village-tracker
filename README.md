@@ -1,15 +1,16 @@
-# CoC Village Tracker PWA v2
+# CoC Village Tracker PWA v3
 
-A mobile-first, installable PWA inspired by the supplied village dashboard screenshot.
+Mobile-first installable PWA inspired by the supplied dashboard screenshot.
 
-## Files
-- `index.html` — app UI and timer logic
-- `manifest.webmanifest` — install metadata
-- `sw.js` — offline caching
-- `icon-192.png`, `icon-512.png` — app icons
+## Importing your village
+Open the app, expand **Import village JSON**, choose the JSON export file or paste the exported JSON, then tap **Import village data**. The app reads the player tag and currently exported timer/cooldown fields. Imported timers are calculated from the export timestamp and count down locally.
+
+## Important limitations
+- The export may contain upgrade timers for heroes, buildings, pets, spells, troops and helper cooldowns; not every item is necessarily a builder upgrade.
+- Timer names are identified only where IDs are confidently mapped. Unrecognized IDs are shown as numeric IDs rather than guessed.
+- This is an export snapshot, not a live sync. Re-export/import to refresh it.
+- The API token is not sent or persisted. Never expose a Supercell API token in public client-side code.
+- PWA countdowns update while the app is open; browser background execution and notifications are not guaranteed.
 
 ## Install
-Host these files on an HTTPS static host (for example GitHub Pages), then open the site in Chrome on Android and choose **Install app** / **Add to Home screen**.
-
-## API token safety
-The token field is session-only and is not persisted or sent anywhere. Supercell's public API does not expose live builder timers; API integration requires a secure backend and stable whitelisted IP. Do not put a production API token into a public client-side app.
+Host all files on HTTPS (e.g. GitHub Pages), then open in Android Chrome and choose Install app / Add to Home screen.
